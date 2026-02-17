@@ -1,5 +1,5 @@
 from django.contrib import admin
-from apps.common.models_abstract import AbstractDateTimeModel, AbstractShortDateTimeModel
+from .models_abstract import AbstractDateTimeModel, AbstractShortDateTimeModel
 
 
 class AbstractDateTimeModelAdmin(admin.ModelAdmin):
