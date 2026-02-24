@@ -1,3 +1,4 @@
+import json
 import logging
 from django.db import models
 from django.db import connections
@@ -68,6 +69,26 @@ class AbstractDateTimeModel(AbstractShortDateTimeModel):
 
     class Meta:
         abstract = True
+
+
+class WithJsonFieldsMixin:
+    """Модель с json полями
+    """
+    def get_json_field(self, field_name: str) -> list:
+        """Вспомогательная функция для получения json-поля
+           Например, available_values = models.TextField(verbose_name='Возможные значения')
+               def get_available_values(self):
+                   # можно через or {}
+                   return self.get_json_field(field_name='available_values') or []
+           :param field_name: имя поля
+        """
+        field_value = getattr(self, field_name)
+        if isinstance(field_value, str):
+            try:
+                field_value = json.loads(field_value.replace('\'', '"'))
+            except Exception as e:
+                logger.info('exception for json field %s is %s' % (field_name, e))
+        return field_value or []
 
 
 class AbstractNameModel(models.Model):
