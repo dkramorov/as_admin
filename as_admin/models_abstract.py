@@ -142,6 +142,8 @@ def prefetch_model_fk(rows: list, field_name: str):
        :param rows: Queryset
        :param field_name: поле, которое является ForeinKey
     """
+    if not rows:
+        return
     customer_from_route = None
     if not isinstance(rows, (list, tuple, models.QuerySet)):
         # Если передается моделька вместо списка
