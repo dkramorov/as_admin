@@ -1,8 +1,10 @@
 import json
 import logging
+import time
+
+from django.apps import apps
 from django.db import models
 from django.db import connections
-
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.admin.models import LogEntry, ADDITION
 
@@ -93,6 +95,11 @@ class WithJsonFieldsMixin:
 
 class OnlyFieldsMixin:
     """Метод для модельки only_fields (поля для object_fields)
+       Для того, чтобы поля не выводились в cls добавляем метод,
+       который будет пропускать поля
+       @classmethod
+       def pass_fields(cls):
+           return ('created_at', 'updated_at')
     """
     @classmethod
     def only_fields(cls) -> list:
@@ -104,8 +111,13 @@ class OnlyFieldsMixin:
             'DateField', 'DateTimeField',
             'BooleanField',
         )
+        pass_fields = ()
+        if hasattr(cls, 'pass_fields'):
+            pass_fields = cls.pass_fields()
         result = []
         for field in cls._meta.fields:
+            if field.name in pass_fields:
+                continue
             if field.get_internal_type() in only_types:
                 result.append(field.name)
         return result
@@ -132,6 +144,103 @@ class AbstractNameModel(models.Model):
             self.first_name or '',
             self.patronymic or '',
         ]))
+
+
+def fetched_foreign_key(row, field_name: str):
+    """Проверяем, вытащено ли поле из базы по Foreign key
+       :param row: экземпляр модели
+       :param field_name: поле модели (row) которое является fk
+    """
+    return row._state.fields_cache.get(field_name)
+
+
+def object_fields(row,
+                  pass_fields: tuple = None,
+                  only_fields: tuple = None,
+                  fk_only_keys: dict = None,
+                  related_fields: list = None,
+                  include_methods: list = None):
+    """Все параметры объекта словарем (id, state, created...)
+       :param pass_fields: ('пропускаем', 'эти', 'поля')
+       :param only_fields: ('достаем', 'только', 'эти', 'поля')
+       :param fk_only_keys: {'fk_field': ('достаем', 'только', 'эти', 'поля'), ...}
+       :param related_fields: поля ссылающиеся на этот объект (OneToOneRel)
+       :param include_methods: какие методы надо использовать как поля (метод модели в поле)
+       Можно сделать row.full_clean(), что приведет
+       все данные к нужному типу/виду"""
+    if not row:
+        return {}
+
+    result = {}
+
+    if not pass_fields:
+        pass_fields = ()
+    if not only_fields:
+        only_fields = ()
+    if not fk_only_keys:
+        fk_only_keys = {}
+    if not related_fields:
+        related_fields = ()
+    if not include_methods:
+        include_methods = ()
+
+    # OneToOneRel отношения (если у нас есть поле OneToOneField и мы запрашиваем его из связанной модели)
+    if related_fields:
+        for field in row.__class__._meta.related_objects:
+            if field.name in related_fields and isinstance(field, models.fields.related.OneToOneRel):
+                # Если связанный объект вытащен - заполняем его
+                fetched_fk = fetched_foreign_key(row, field.name)
+                if fetched_fk:
+                    value = object_fields(fetched_fk,
+                        only_fields=fk_only_keys.get(field.name),
+                        fk_only_keys=fk_only_keys,
+                    )
+                    result[field.name] = value
+
+    for field in row.__class__._meta.fields:
+        if field.name in pass_fields:
+            continue
+        elif field.name in fk_only_keys:
+            # Не пропускаем поля, если они указаны явно как foreign_keys
+            pass
+        elif only_fields and field.name not in only_fields:
+            continue
+
+        # TODO: ManyToManyField...
+        if isinstance(field, (models.fields.related.ForeignKey, models.fields.related.OneToOneField)):
+            value = getattr(row, '%s_id' % field.name)
+            # Если связанный объект вытащен - заполняем его
+            fetched_fk = fetched_foreign_key(row, field.name)
+            if fetched_fk:
+                value = object_fields(fetched_fk,
+                    only_fields=fk_only_keys.get(field.name),
+                    fk_only_keys=fk_only_keys,
+                )
+        else:
+            value = getattr(row, field.name)
+
+        if isinstance(field, (models.fields.IntegerField, models.fields.BigIntegerField)):
+            if value != None:
+                value = int(value)
+        elif isinstance(field, models.fields.DateTimeField):
+            if value:
+                value = value.strftime('%Y-%m-%dT%H:%M:%S')
+        elif isinstance(field, models.fields.DateField):
+            if value:
+                value = value.strftime('%Y-%m-%d')
+        elif isinstance(field, models.fields.DecimalField):
+            if value:
+                value = float(value)
+        elif isinstance(field, models.fields.BooleanField):
+            if value:
+                value = True
+            else:
+                value = False
+        result[field.name] = value
+    for include_method in include_methods:
+        if hasattr(row, include_method):
+            result[include_method] = getattr(row, include_method)
+    return result
 
 
 class AbstractCacher:
