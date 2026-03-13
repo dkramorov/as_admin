@@ -91,6 +91,26 @@ class WithJsonFieldsMixin:
         return field_value or []
 
 
+class OnlyFieldsMixin:
+    """Метод для модельки only_fields (поля для object_fields)
+    """
+    @classmethod
+    def only_fields(cls) -> list:
+        """Поля для маршрутов
+        """
+        only_types = (
+            'BigAutoField', 'AutoField',
+            'CharField', 'IntegerField', 'BigIntegerField', 'DecimalField',
+            'DateField', 'DateTimeField',
+            'BooleanField',
+        )
+        result = []
+        for field in cls._meta.fields:
+            if field.get_internal_type() in only_types:
+                result.append(field.name)
+        return result
+
+
 class AbstractNameModel(models.Model):
     """Default first_name, last_name, middle_name model
     """
@@ -114,22 +134,114 @@ class AbstractNameModel(models.Model):
         ]))
 
 
+class AbstractCacher:
+    """Класс для кэширования записией модельки
+       использовать для небольших таблиц (справочников)
+       Использовать лучше в каком-нибудь файле,
+       чтобы был постоянный экземпляр кэшера для модели
+       например, form_cacher = AbstractCacher('data.Form')
+    """
+    updated = None
+    ttl = 60*60*6
+    model = None
+    objs = {}
+    debug = False
+    instance = None
+    # Для кэширования ссылки на s3
+    s3_fields = None
+
+    def __init__(self,
+                 instance: str = 'shop.PaymentMethod',
+                 ttl: int = 60*60*6,
+                 s3_fields: list = None):
+        """Инициализация
+           :param instance: метка модельки
+           :param ttl: время жизни кэшированных записей
+           :param s3_fields: поля с s3 полем
+        """
+        self.instance = instance
+        self.ttl = ttl
+        self.s3_fields = s3_fields
+        self.objs = {}
+        self.updated = None
+        self.model = None
+
+    def load_model(self):
+        """Загрузить модель
+        """
+        if not self.model:
+            self.model = apps.get_model(self.instance)
+
+    def get_all(self):
+        """Вытащить из базы все записи
+        """
+        now = time.time()
+        if not self.updated or self.updated < now - self.ttl:
+            self.update_all()
+        else:
+            if self.debug:
+                logger.info('from cache %s' % self.model.__name__)
+        return self.objs
+
+    def update_all(self):
+        """Обновить информацию
+        """
+        self.load_model()
+        if self.debug:
+            logger.info('updating cache %s' % self.model.__name__)
+        self.updated = time.time()
+        query = self.model.objects.all()
+        for item in query:
+            self.objs[item.id] = object_fields(item)
+            if self.s3_fields:
+                for s3_field in self.s3_fields:
+                    if hasattr(item, s3_field) and getattr(item, s3_field):
+                        if item._meta.get_field(s3_field).get_internal_type() == 'FileField':
+                            self.objs[item.id]['%s_FileField' % s3_field] = getattr(item, s3_field).url
+
+    def get_by_pk(self,
+                  pk: int,
+                  only_fields: list = None,
+                  pass_fields: list = None,
+                  only_fields_from_model: bool = False):
+        """Получение по ид записи из кэша
+           Модель при первом вызове еще не задана и будет вычислена из instance
+           only_fields можно вытащить по staticmethod после этого
+           :param pk: идентификатор
+           :param only_fields: в результат записывать только поля из этого списка
+           :param pass_fields: в результат не записывать поля из этого списка
+           :param only_fields_from_model: если в моделе есть only_fields то использовать его
+        """
+        try:
+            pk = int(pk)
+        except Exception:
+            pk = 0
+        items = self.get_all()
+        result = items.get(pk, {})
+        if not pass_fields:
+            pass_fields = []
+        if only_fields_from_model and not only_fields and hasattr(self.model, 'only_fields'):
+            # Если в классе есть метод only_fields, используем
+            only_fields = getattr(self.model, 'only_fields')()
+        if only_fields:
+            return {k: v for k, v in result.items() if k in only_fields and k not in pass_fields}
+        return {k: v for k, v in result.items() if k not in pass_fields}
+
+
 def set_customer_for_model(model_instance, customer):
     """Задать для модели ид пользователя, который выполняет маршрут,
        модель получена в маршруте self.retrieve(str(item.id).strip(), is_force=True),
        если хотим ограничить видимость каких-то сущностей,
        в методах будем проверять hasattr(model_instance, customer_from_route_key)
        :param model_instance: экземпляр модели
-       :param customer: кто просматривает маршрут
+       :param customer: пользователь
     """
     if not model_instance or not customer:
         return
-    #customer_id = customer if isinstance(customer, int) else customer.id
     if not isinstance(model_instance, (list, tuple, models.QuerySet)):
         # Если передается моделька вместо списка
         model_instance = [model_instance]
     for item in model_instance:
-        #setattr(item, customer_from_route_key, customer_id)
         setattr(item, customer_from_route_key, customer)
 
 
