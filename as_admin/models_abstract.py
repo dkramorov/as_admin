@@ -152,10 +152,10 @@ def prefetch_model_fk(rows: list, field_name: str):
         if hasattr(rows[0], customer_from_route_key):
             customer_from_route = getattr(rows[0], customer_from_route_key)
     if not customer_from_route:
-        logger.info('can not execute prefetch_model_fk %s_id, because customer_from_route_key not set' % (
+        logger.info('[WARNING]: execute prefetch_model_fk %s_id, customer_from_route_key not set' % (
             field_name,
         ))
-        return
+        #return
     model = rows[0]._meta.model
     cur_field = [field for field in model._meta.fields if field.name == field_name]
     if not cur_field:
@@ -164,14 +164,25 @@ def prefetch_model_fk(rows: list, field_name: str):
             field_name,
         ))
         return
+    cached_field_name = '%s_cached' % field_name
+    cached_field_name_flag = '%s_flag' % cached_field_name
     field = cur_field[0]
     rel_model = field.related_model
     fname = '%s_id' % field.name
-    ids = {getattr(row, fname): None for row in rows}
+    ids = {
+        getattr(row, fname): None for row in rows if not hasattr(row, cached_field_name_flag)
+    }
+    if not ids:
+        return
+
     objs = rel_model.objects.filter(pk__in=ids.keys())
     for obj in objs:
         ids[obj.id] = obj
+
+    # Пробрасываем пользователя всем вытащенным объектам
+    set_customer_for_model(customer=customer_from_route, model_instance=objs)
     for row in rows:
         rel_pk = getattr(row, fname)
         obj = ids.get(rel_pk)
-        setattr(row, '%s_cached' % field_name, obj)
+        setattr(row, cached_field_name, obj)
+        setattr(row, cached_field_name_flag, '1')
