@@ -248,7 +248,7 @@ class AbstractCacher:
        использовать для небольших таблиц (справочников)
        Использовать лучше в каком-нибудь файле,
        чтобы был постоянный экземпляр кэшера для модели
-       например, form_cacher = AbstractCacher('data.Form')
+       например, form_cacher = AbstractCacher('data.Form', ttl=60*3)
     """
     updated = None
     ttl = 60*60*6
@@ -355,13 +355,13 @@ def set_customer_for_model(model_instance, customer):
 
 
 def prefetch_model_fk(rows: list, field_name: str):
-    """Предварительное получение связанных моделей
+    """Предварительное получение связанных моделей по ForeignKey
        Выполнять после set_customer_for_model(model_instance=rows, customer=self.customer)
        Например,
        set_customer_for_model(model_instance=result, customer=self.customer)
        child_statement_model.prefetch_model_fk(rows=result, field_name='address')
        :param rows: Queryset
-       :param field_name: поле, которое является ForeinKey
+       :param field_name: поле, которое является ForeignKey
     """
     if not rows:
         return
@@ -385,9 +385,9 @@ def prefetch_model_fk(rows: list, field_name: str):
             field_name,
         ))
         return
+    field = cur_field[0]
     cached_field_name = '%s_cached' % field_name
     cached_field_name_flag = '%s_flag' % cached_field_name
-    field = cur_field[0]
     rel_model = field.related_model
     fname = '%s_id' % field.name
     ids = {
@@ -407,3 +407,68 @@ def prefetch_model_fk(rows: list, field_name: str):
         obj = ids.get(rel_pk)
         setattr(row, cached_field_name, obj)
         setattr(row, cached_field_name_flag, '1')
+
+def prefetch_model_related(rows: list, related_name: str, select_related: list = None):
+    """Предварительное получение связанных моделей по ForeignKey реверсивно,
+       то есть, находим row.related_name_set.all()
+       например, principal.principaltype_set.field это PrincipalType.ForeignKey поле на Principal
+       Выполнять после set_customer_for_model(model_instance=rows, customer=self.customer)
+       Например,
+       set_customer_for_model(model_instance=result, customer=self.customer)
+       child_statement_model.prefetch_model_related(rows=result, field_name='files_set')
+       :param rows: Queryset
+       :param related_name: поле, которое указано в другой модели как ForeignKey
+       :param select_related: список полей, которые надо сразу доставать
+    """
+    if not rows:
+        return
+    customer_from_route = None
+    if not isinstance(rows, (list, tuple, models.QuerySet)):
+        # Если передается моделька вместо списка
+        rows = [rows]
+    if rows:
+        if hasattr(rows[0], customer_from_route_key):
+            customer_from_route = getattr(rows[0], customer_from_route_key)
+    if not customer_from_route:
+        logger.info('[WARNING]: execute prefetch_model_related %s, customer_from_route_key not set' % (
+            related_name,
+        ))
+        #return
+    if not hasattr(rows[0], related_name):
+        logger.info('[ERROR]: execute prefetch_model_related failed, because field %s absent in model %s' % (
+            related_name,
+            rows[0]._meta.model,
+        ))
+        return
+    related_manager = getattr(rows[0], related_name)
+    related_model = related_manager.model
+    related_field = related_manager.field
+
+    cached_related_name = '%s_cached' % related_name
+    cached_related_name_flag = '%s_flag' % cached_related_name
+
+    ids = {}
+    for row in rows:
+        if hasattr(row, cached_related_name_flag):
+            continue
+        setattr(row, cached_related_name, [])
+        ids[row.id] = row
+
+    if not ids:
+        return
+
+    cond = {'%s__in' % related_field.name: ids.keys()}
+    if not select_related:
+        select_related = []
+    objs = related_model.objects.select_related(*select_related).filter(**cond)
+    for obj in objs:
+        field_name = '%s_id' % related_field.name
+        field_value = getattr(obj, field_name)
+        row = ids.get(field_value)
+        if row:
+            cached_related = getattr(row, cached_related_name)
+            cached_related.append(obj)
+            setattr(row, cached_related_name_flag, '1')
+
+    # Пробрасываем пользователя всем вытащенным объектам
+    set_customer_for_model(customer=customer_from_route, model_instance=objs)
