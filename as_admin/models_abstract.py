@@ -300,6 +300,7 @@ class AbstractCacher:
             logger.info('updating cache %s' % self.model.__name__)
         self.updated = time.time()
         query = self.model.objects.all()
+        self.objs = {} # Обнуляем имеющиеся данные
         for item in query:
             self.objs[item.id] = object_fields(item)
             if self.s3_fields:
