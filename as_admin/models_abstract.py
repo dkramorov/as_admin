@@ -85,11 +85,11 @@ class WithJsonFieldsMixin:
            :param field_name: имя поля
         """
         field_value = getattr(self, field_name)
-        if isinstance(field_value, str):
+        if isinstance(field_value, str) and field_value:
             try:
                 field_value = json.loads(field_value.replace('\'', '"'))
             except Exception as e:
-                logger.info('exception for json field %s is %s' % (field_name, e))
+                logger.info('exception for json field "%s" is %s, raw_data "%s"' % (field_name, e, field_value))
         return field_value or []
 
 
