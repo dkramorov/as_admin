@@ -224,7 +224,7 @@ def object_fields(row,
                 value = int(value)
         elif isinstance(field, models.fields.DateTimeField):
             if value:
-                value = value.strftime('%Y-%m-%dT%H:%M:%S')
+                value = value.strftime('%Y-%m-%dT%H:%M:%SZ')
         elif isinstance(field, models.fields.DateField):
             if value:
                 value = value.strftime('%Y-%m-%d')
