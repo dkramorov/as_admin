@@ -416,6 +416,7 @@ def prefetch_model_fk(rows: list, field_name: str):
         setattr(row, cached_field_name, obj)
         setattr(row, cached_field_name_flag, '1')
 
+
 def prefetch_model_related(rows: list, related_name: str, select_related: list = None):
     """Предварительное получение связанных моделей по ForeignKey реверсивно,
        то есть, находим row.related_name_set.all()
