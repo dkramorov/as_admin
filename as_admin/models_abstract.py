@@ -114,12 +114,19 @@ class OnlyFieldsMixin:
         pass_fields = ()
         if hasattr(cls, 'pass_fields'):
             pass_fields = cls.pass_fields()
+            if not isinstance(pass_fields, (list, tuple)):
+                logger.info('[ERROR]: pass fields method return %s' % pass_fields)
+                pass_fields = ()
         result = []
         for field in cls._meta.fields:
             if field.name in pass_fields:
                 continue
             if field.get_internal_type() in only_types:
                 result.append(field.name)
+        if hasattr(cls, 'include_fields'):
+            include_fields = cls.include_fields()
+            if isinstance(include_fields, (list, tuple)):
+                result += include_fields
         return result
 
 

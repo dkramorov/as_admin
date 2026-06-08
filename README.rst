@@ -15,9 +15,7 @@ python setup.py sdist
     ]
 
 2. Добавляем ссылки в urls.py::
-    from django.conf import settings
-    from django.urls import path, include, re_path
-    from django.views.static import serve
+    from django.urls import path, include
     ...
     path('admin/', include('as_admin.urls')),
     ...
