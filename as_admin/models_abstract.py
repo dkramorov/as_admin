@@ -362,7 +362,7 @@ def set_customer_for_model(model_instance, customer):
         setattr(item, customer_from_route_key, customer)
 
 
-def prefetch_model_fk(rows: list, field_name: str):
+def prefetch_model_fk(rows: list, field_name: str, select_related: list = None):
     """Предварительное получение связанных моделей по ForeignKey
        Выполнять после set_customer_for_model(model_instance=rows, customer=self.customer)
        Например,
@@ -370,6 +370,7 @@ def prefetch_model_fk(rows: list, field_name: str):
        child_statement_model.prefetch_model_fk(rows=result, field_name='address')
        :param rows: Queryset
        :param field_name: поле, которое является ForeignKey
+       :param select_related: список связей, которые надо сразу доставать
     """
     if not rows:
         return
@@ -404,7 +405,10 @@ def prefetch_model_fk(rows: list, field_name: str):
     if not ids:
         return
 
-    objs = rel_model.objects.filter(pk__in=ids.keys())
+    if not select_related:
+        select_related = []
+    objs = rel_model.objects.select_related(*select_related).filter(pk__in=ids.keys())
+
     for obj in objs:
         ids[obj.id] = obj
 
@@ -427,7 +431,7 @@ def prefetch_model_related(rows: list, related_name: str, select_related: list =
        child_statement_model.prefetch_model_related(rows=result, field_name='files_set')
        :param rows: Queryset
        :param related_name: поле, которое указано в другой модели как ForeignKey
-       :param select_related: список полей, которые надо сразу доставать
+       :param select_related: список связей, которые надо сразу доставать
     """
     if not rows:
         return
