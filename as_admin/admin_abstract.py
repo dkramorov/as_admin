@@ -1,4 +1,9 @@
+import json
+
 from django.contrib import admin
+from django import forms
+
+from managers.simple_logger import json_pretty_print
 from .models_abstract import AbstractDateTimeModel, AbstractShortDateTimeModel
 
 
@@ -53,3 +58,22 @@ class InputFilter(admin.SimpleListFilter):
             if k != self.parameter_name
         )
         yield all_choice
+
+
+class TextareaJSONWidget(forms.Textarea):
+    """Виджет для редактирования json поля
+        from as_admin.admin_abstract import TextareaJSONWidget
+        ...
+        custom_widgets = {
+            'dadata': TextareaJSONWidget,
+        }
+        def formfield_for_dbfield(self, db_field, **kwargs):
+            if db_field.name in self.custom_widgets:
+                kwargs['widget'] = self.custom_widgets[db_field.name]
+            return super(ModelPermissionAdmin, self).formfield_for_dbfield(db_field, **kwargs)
+    """
+    def format_value(self, value):
+        try:
+            return json_pretty_print(json.loads(value))
+        except (ValueError, TypeError):
+            return super().format_value(value)
