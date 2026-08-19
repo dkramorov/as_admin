@@ -419,6 +419,13 @@ def prefetch_model_fk(rows: list, field_name: str, select_related: list = None):
         obj = ids.get(rel_pk)
         setattr(row, cached_field_name, obj)
         setattr(row, cached_field_name_flag, '1')
+        for item in select_related:
+            # TODO: вглубь (item__subitem)
+            item_key = '%s_id' % item
+            if hasattr(obj, item_key):
+                item_select_related_cached_key = '%s_cached' % item
+                item_select_related = getattr(obj, item)
+                setattr(obj, item_select_related_cached_key, item_select_related)
 
 
 def prefetch_model_related(rows: list, related_name: str, select_related: list = None):
