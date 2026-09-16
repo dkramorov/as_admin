@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import time
@@ -61,6 +62,25 @@ class AbstractShortDateTimeModel(models.Model):
 
     class Meta:
         abstract = True
+
+
+class AbstractTask(AbstractShortDateTimeModel):
+    """Задачи для call_command
+    """
+    name = models.CharField(blank=True, null=True, max_length=255, db_index=True)
+    command = models.TextField()
+
+    class Meta:
+        verbose_name = 'Фоновая задача'
+        verbose_name_plural = 'Фоновые задачи'
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        analogs = self._meta.model.objects.filter(command=self.command)
+        if analogs:
+            analogs.update(updated_at=datetime.datetime.now())
+        else:
+            super().save(*args, **kwargs)
 
 
 class AbstractDateTimeModel(AbstractShortDateTimeModel):
