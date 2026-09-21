@@ -1,16 +1,18 @@
 import datetime
 import json
-import logging
 import time
+import traceback
 
 from django.apps import apps
 from django.db import models
 from django.db import connections
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.admin.models import LogEntry, ADDITION
+from django.core.management import call_command
+
+from managers.simple_logger import logger, json_pretty_print
 
 
-logger = logging.getLogger()
 customer_from_route_key = 'customer_from_route'
 
 
@@ -81,6 +83,43 @@ class AbstractTask(AbstractShortDateTimeModel):
             analogs.update(updated_at=datetime.datetime.now())
         else:
             super().save(*args, **kwargs)
+
+    def run_task(self):
+        """Запускает фоновую задачу из Tasks очереди
+           :param task: фоновая задача, где task.command - команда строкой
+        """
+        opts = {}
+        command = self.command
+        # Саму себя не выполняем
+        if not command or 'tasks' in command:
+            logger.info('[INFO]: ignore %s - %s' % (self.name, command))
+            self.delete()
+            return
+
+        now = datetime.datetime.today().strftime('%H:%M:%S %d/%m/%Y')
+        logger.info('[INFO]: task %s - %s started %s' % (now, self.name, command))
+
+        if '--' in command:
+            cur_name = command.split('--')
+            command = cur_name[0].strip()
+            for i in range(len(cur_name)):
+                if i == 0:
+                    continue
+                if cur_name[i]:
+                    if '=' in cur_name[i]:
+                        key, value = cur_name[i].split('=', 1)
+                        key = str(key.strip())
+                        value = value.strip()
+                        opts[key] = value
+                    else:
+                        key = cur_name[i].strip()
+                        opts[key] = True
+        try:
+            self.delete()
+            call_command(command, **opts)
+        except:
+            error = traceback.format_exc()
+            logger.info('[ERROR]: %s' % error)
 
 
 class AbstractDateTimeModel(AbstractShortDateTimeModel):

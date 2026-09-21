@@ -7,6 +7,41 @@ from managers.simple_logger import json_pretty_print
 from .models_abstract import AbstractDateTimeModel, AbstractShortDateTimeModel
 
 
+class ChangePasswdAdminForm(forms.ModelForm):
+    """Форма для смены пароля пользователя
+       Пример использования:
+       class UserAdmin(ImportExportModelAdmin):
+           form = ChangePasswdAdminForm
+           ...
+           def save_model(self, request, obj, form, change):
+               super().save_model(request, obj, form, change)
+               new_passwd = form.cleaned_data.get('new_passwd')
+               if obj.id and new_passwd:
+                   from passlib.hash import bcrypt
+                   passwd = bcrypt.using(**obj._meta.model.BCRYPT_SETTINGS).hash(new_passwd)
+                   obj._meta.model.objects.filter(pk=obj.id).update(password=passwd)
+    """
+    new_passwd = forms.CharField(required=False, label='Сменить пароль', widget=forms.TextInput)
+
+    class Meta:
+        #model = Customer
+        exclude = []
+
+    def __init__(self, *args, **kwargs):
+        instance = kwargs.get('instance')
+        if instance:
+            initial = kwargs.get('initial', {})
+            initial['new_passwd'] = ''
+            kwargs['initial'] = initial
+        super().__init__(*args, **kwargs)
+
+    def save(self, commit=True):
+        new_passwd = self.cleaned_data.get('new_passwd', None)
+        if new_passwd:
+            self.cleaned_data['new_passwd'] = new_passwd
+        return super().save(commit=commit)
+
+
 class AbstractDateTimeModelAdmin(admin.ModelAdmin):
     """Модель для вывода полей created_at, update_at, deleted_at
     """
