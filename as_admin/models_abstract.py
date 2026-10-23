@@ -403,6 +403,18 @@ class AbstractCacher:
             return {k: v for k, v in result.items() if k in only_fields and k not in pass_fields}
         return {k: v for k, v in result.items() if k not in pass_fields}
 
+    def get_by_field(self, field_name: str, value: str, **kwargs):
+        """Получение по произвольному полю
+           :param field_name: имя поля
+           :param value: значение
+        """
+        if not field_name:
+            return {}
+        for pk, item in self.get_all().items():
+            if field_name in item and item[field_name] == value:
+                return self.get_by_pk(pk=pk, **kwargs)
+        return {}
+
 
 def set_customer_for_model(model_instance, customer):
     """Задать для модели ид пользователя, который выполняет маршрут,

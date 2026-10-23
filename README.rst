@@ -20,4 +20,10 @@ python setup.py sdist
     path('admin/', include('as_admin.urls')),
     ...
 
-
+3. Не забыть при наследовании от абстрактных моделей в приложениях создавать
+apps.py::
+  from django.apps import AppConfig
+  class YourConfig(AppConfig):
+      default_auto_field = 'django.db.models.BigAutoField'
+      name = 'apps.your_app'
+      verbose_name = 'Your app name'
