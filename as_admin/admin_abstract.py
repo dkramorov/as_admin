@@ -2,9 +2,31 @@ import json
 
 from django.contrib import admin
 from django import forms
+from django.contrib.admin.filters import (
+    AllValuesFieldListFilter,
+    RelatedFieldListFilter,
+    ChoicesFieldListFilter,
+) # Фильтры
 
 from managers.simple_logger import json_pretty_print
 from .models_abstract import AbstractDateTimeModel, AbstractShortDateTimeModel
+
+
+class DropDownChoicesFilter(ChoicesFieldListFilter):
+    """Фильтр с выпадающим списком из choices
+    list_filter = (
+        ('field_name', DropDownChoicesFilter),
+    )
+    """
+    template = 'as_admin/dropdown_filter.html'
+
+
+class DropDownRelatedFilter(RelatedFieldListFilter):
+    template = 'as_admin/dropdown_filter.html'
+
+
+class DropDownAllValuesFilter(AllValuesFieldListFilter):
+    template = 'as_admin/dropdown_filter.html'
 
 
 class ChangePasswdAdminForm(forms.ModelForm):
