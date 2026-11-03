@@ -24,6 +24,10 @@ class DropDownChoicesFilter(ChoicesFieldListFilter):
 class DropDownRelatedFilter(RelatedFieldListFilter):
     template = 'as_admin/dropdown_filter.html'
 
+    def field_choices(self, field, request, model_admin):
+        ordering = ['id']
+        return field.get_choices(include_blank=False, ordering=ordering)
+
 
 class DropDownAllValuesFilter(AllValuesFieldListFilter):
     template = 'as_admin/dropdown_filter.html'
