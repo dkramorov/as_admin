@@ -575,6 +575,10 @@ def prefetch_model_index(rows: list, indexer: str = 'indexer') -> list:
     if not isinstance(rows, (list, tuple, models.QuerySet)):
         # Если передается моделька вместо списка
         rows = [rows]
+    ids_rows = {}
+    for row in rows:
+        setattr(row, '%s_cached' % indexer, {})
+        ids_rows[row.id] = row
     model = rows[0]._meta.model
     if not hasattr(model, indexer):
         logger.info('[INFO]: prefetch_model index %s failed, %s absent' % (model, indexer))
@@ -582,11 +586,20 @@ def prefetch_model_index(rows: list, indexer: str = 'indexer') -> list:
     ids = [row.id for row in rows]
     query = ' OR '.join('id:%s' % pk for pk in ids)
     search = getattr(model, indexer).search(query)
-    return [
-        {
-            'pk': item.pk,
-            'tags': {
-                tag_key: tag_value.decode('utf-8') for tag_key, tag_value in item.tags.items()
-            },
-        } for item in search
-    ]
+    for item in search:
+        pk = item.pk
+        row = ids_rows.get(pk)
+        if not row:
+            continue
+        tags = {
+            tag_key: tag_value.decode('utf-8') for tag_key, tag_value in item.tags.items()
+        }
+        setattr(row, '%s_cached' % indexer, tags)
+    #return [
+    #    {
+    #        'pk': item.pk,
+    #        'tags': {
+    #            tag_key: tag_value.decode('utf-8') for tag_key, tag_value in item.tags.items()
+    #        },
+    #    } for item in search
+    #]
