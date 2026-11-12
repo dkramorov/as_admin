@@ -453,14 +453,14 @@ def prefetch_model_fk(rows: list, field_name: str, select_related: list = None):
         if hasattr(rows[0], customer_from_route_key):
             customer_from_route = getattr(rows[0], customer_from_route_key)
     if not customer_from_route:
-        logger.info('[WARNING]: execute prefetch_model_fk %s_id, customer_from_route_key not set' % (
+        logger.info('[INFO]: execute prefetch_model_fk %s_id, customer_from_route_key not set' % (
             field_name,
         ))
         #return
     model = rows[0]._meta.model
     cur_field = [field for field in model._meta.fields if field.name == field_name]
     if not cur_field:
-        logger.info('can not execute prefetch_model_fk %s.%s_id, because cur_field not found' % (
+        logger.info('[ERROR]: can not execute prefetch_model_fk %s.%s_id, because cur_field not found' % (
             model._meta.label,
             field_name,
         ))
@@ -521,7 +521,7 @@ def prefetch_model_related(rows: list, related_name: str, select_related: list =
         if hasattr(rows[0], customer_from_route_key):
             customer_from_route = getattr(rows[0], customer_from_route_key)
     if not customer_from_route:
-        logger.info('[WARNING]: execute prefetch_model_related %s, customer_from_route_key not set' % (
+        logger.info('[INFO]: execute prefetch_model_related %s, customer_from_route_key not set' % (
             related_name,
         ))
         #return
@@ -563,3 +563,30 @@ def prefetch_model_related(rows: list, related_name: str, select_related: list =
 
     # Пробрасываем пользователя всем вытащенным объектам
     set_customer_for_model(customer=customer_from_route, model_instance=objs)
+
+
+def prefetch_model_index(rows: list, indexer: str = 'indexer') -> list:
+    """Предварительное получение данных из индекса
+       :param rows: Queryset
+       :param indexer: название менеджера индекса
+    """
+    if not rows or not hasattr(rows[0], 'id'):
+        return
+    if not isinstance(rows, (list, tuple, models.QuerySet)):
+        # Если передается моделька вместо списка
+        rows = [rows]
+    model = rows[0]._meta.model
+    if not hasattr(model, indexer):
+        logger.info('[INFO]: prefetch_model index %s failed, %s absent' % (model, indexer))
+        return
+    ids = [row.id for row in rows]
+    query = ' OR '.join('id:%s' % pk for pk in ids)
+    search = getattr(model, indexer).search(query)
+    return [
+        {
+            'pk': item.pk,
+            'tags': {
+                tag_key: tag_value.decode('utf-8') for tag_key, tag_value in item.tags.items()
+            },
+        } for item in search
+    ]
