@@ -7,7 +7,6 @@ from django.apps import apps
 from django.db import models
 from django.db import connections
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.admin.models import LogEntry, ADDITION
 from django.core.management import call_command
 
 from managers.simple_logger import logger, json_pretty_print
@@ -30,6 +29,12 @@ def raw_query(query, db: str = 'default', action: str = None):
     return result
 
 
+def get_cur_app(model):
+    """Возвращает текущее приложение (папка модели)
+       :param model: модель
+    """
+    return model._meta.label.split('.')[0]
+
 
 class AbstractLogModel(models.Model):
     class Meta:
@@ -38,18 +43,19 @@ class AbstractLogModel(models.Model):
     def log_action(self,
                    message: str = '',
                    user_id: int = 1,
-                   action_flag: int = ADDITION):
+                   action_flag: int = None):
         """Логирование события
            :param message: сообщение
            :param user_id: от имени какого пользователя админки записать событие
            :param action_flag: флаг
         """
+        from django.contrib.admin.models import LogEntry, ADDITION
         LogEntry.objects.log_action(
             user_id=user_id,
             content_type_id=ContentType.objects.get_for_model(self).pk,
             object_id=self.pk,
             object_repr='%s' % self,
-            action_flag=action_flag,
+            action_flag=action_flag or ADDITION,
             change_message=message,
         )
 
@@ -190,7 +196,7 @@ class OnlyFieldsMixin:
 
 
 class AbstractNameModel(models.Model):
-    """Default first_name, last_name, middle_name model
+    """ФИО
     """
     first_name = models.CharField(max_length=255, blank=True, null=True, db_index=True,
         verbose_name='Имя')
